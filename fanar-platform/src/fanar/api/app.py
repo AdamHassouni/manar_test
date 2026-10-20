@@ -8,6 +8,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 
 from fanar import __version__
+from fanar.api.routes_ibor import router as ibor_router
 from fanar.api.routes_reference import router as reference_router
 from fanar.config import Settings
 
@@ -21,3 +22,4 @@ def health() -> dict:
 
 
 app.include_router(reference_router, prefix="/api/v1/reference", tags=["reference"])
+app.include_router(ibor_router, prefix="/api/v1/ibor", tags=["ibor"])

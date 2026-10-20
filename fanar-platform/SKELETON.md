@@ -9,13 +9,18 @@ adapters over it (FastAPI, Postgres, Keycloak, Vault).
 ```bash
 # Core tests — no third-party deps needed:
 cd fanar-platform
-PYTHONPATH=src python -m unittest discover -s tests -t . -v      # 23 tests, all green
+PYTHONPATH=src python -m unittest discover -s tests -t . -v      # 25 tests, all green
 
 # Full app (needs deps): pip install -e ".[dev]" then
 docker compose up -d                      # postgres + keycloak + vault for end-to-end
 FANAR_DB_DSN=postgresql+psycopg://fanar:fanar@localhost:5432/fanar alembic upgrade head   # create tables (events + projections)
 uvicorn fanar.api.app:app --reload        # GET /health, /api/v1/reference/...
 python -m fanar.ibor.projection_runner    # keep read models in sync (outbox + LISTEN/NOTIFY)
+
+# record a transaction (dev needs no IdP), then read the projected positions:
+curl -s -XPOST localhost:8000/api/v1/ibor/commands/record-transaction -H 'content-type: application/json' \
+  -d '{"fund":"3983","instrument":"BDT1","quantity":100,"effective_date":"2026-10-19"}'
+curl -s localhost:8000/api/v1/ibor/positions
 ```
 
 ## Layout
@@ -27,11 +32,11 @@ fanar-platform/
 │  ├─ config.py               # env-driven settings (no secrets in source)
 │  ├─ domain/                 # events.py (immutable ledger facts) · models.py (entities from docs/05)
 │  ├─ ibor/                   # event_store.py (in-memory) · pg_event_store.py (Postgres) · schema.py
-│  │                          #   · mapping.py · projections.py · projection_runner.py · factory.py
+│  │                          #   · mapping.py · projections.py · projection_runner.py · commands.py · factory.py
 │  ├─ acl/                    # guard.py (read-only enforcement) · manar_client.py (doc-05 endpoint map)
 │  ├─ reference/              # service.py (Local + Manar-backed reference-data service)
 │  ├─ security/              # secrets.py (Vault/env) · auth.py (Keycloak JWT + RBAC)
-│  └─ api/                    # app.py (FastAPI) · routes_reference.py
+│  └─ api/                    # app.py (FastAPI) · deps.py · routes_reference.py · routes_ibor.py
 ├─ migrations/                # Alembic: 0001 creates the append-only events table (+ no-mutate trigger)
 ├─ tests/                     # stdlib unittest — core is provable offline
 ├─ alembic.ini · pyproject.toml · Dockerfile · docker-compose.yml · .env.example
@@ -45,6 +50,12 @@ fanar-platform/
 | **Reference-data service + ACL adapter (grounded in 05)** | `reference/service.py` (`Local` + `Manar` sources), `acl/manar_client.py` (`MANAR_ENDPOINTS` from docs/05 §3), `acl/guard.py` | `test_reference.py`, `test_acl_guard.py` |
 | **Security baseline** | `security/secrets.py` (no plaintext secrets), `security/auth.py` (Keycloak JWT + RBAC) | `test_auth.py` |
 | **IBOR event-store spike** | `ibor/event_store.py` (in-memory) + `ibor/pg_event_store.py` (Postgres, same interface) + `ibor/projections.py`, with the `migrations/0001` events table (append-only, bitemporal, idempotent) | `test_event_store.py`, `test_projections.py`, `test_mapping.py` |
+
+The API is also wired to the ledger: `POST /api/v1/ibor/commands/record-transaction` appends an
+event (idempotent via `Idempotency-Key`, behind a maker/checker role check), and
+`GET /api/v1/ibor/positions` · `GET /api/v1/ibor/events/{fund}` read it back. The store is chosen by
+`ibor/factory` (in-memory under `FANAR_ENV=test`, Postgres otherwise). Command handling lives in the
+stdlib `ibor/commands.py`, so it is unit-tested without a web server.
 
 ## Review findings addressed structurally
 
@@ -65,8 +76,8 @@ fanar-platform/
 
 ## Next (Phase 0 exit — docs/04)
 
-1. Wire the API to the Postgres store via `ibor/factory.build_event_store`; run the projection
-   runner (`python -m fanar.ibor.projection_runner`) as a service.
+1. Integration test of the command → ledger → projection path against a live Postgres
+   (FastAPI TestClient + a disposable DB), then run the projection runner as a service.
 2. Wire Keycloak (realm `fanar`, PKCE client) + JWKS verification + the BFF.
 3. Vault dev secret + the Manar service-account token provider; flip `ManarReferenceSource` live (read-only).
 4. CI: ruff + mypy + the test suite + SBOM/dependency scan.
