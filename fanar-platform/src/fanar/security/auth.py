@@ -54,3 +54,25 @@ def verify_bearer(token: str, *, jwks_url: str, issuer: str, audience: str) -> P
     signing_key = PyJWKClient(jwks_url).get_signing_key_from_jwt(token).key
     claims = jwt.decode(token, signing_key, algorithms=["RS256"], audience=audience, issuer=issuer)
     return principal_from_claims(claims)
+
+
+class JwtVerifier:
+    """Caches the realm JWKS client across requests; verifies signature + iss/aud/exp."""
+
+    def __init__(self, jwks_url: str, issuer: str, audience: str) -> None:
+        self._jwks_url = jwks_url
+        self._issuer = issuer
+        self._audience = audience
+        self._client = None
+
+    def verify(self, token: str) -> Principal:
+        import jwt  # pyjwt (lazy)
+        from jwt import PyJWKClient
+
+        if self._client is None:
+            self._client = PyJWKClient(self._jwks_url)
+        signing_key = self._client.get_signing_key_from_jwt(token).key
+        claims = jwt.decode(
+            token, signing_key, algorithms=["RS256"], audience=self._audience, issuer=self._issuer
+        )
+        return principal_from_claims(claims)
