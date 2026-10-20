@@ -1,0 +1,41 @@
+[project]
+name = "fanar"
+version = "0.0.1"
+description = "Fanar — owned IBOR & operations platform (Phase 0 scaffold)"
+requires-python = ">=3.11"
+# NOTE: the CORE (fanar.domain, fanar.ibor, fanar.acl.guard, fanar.reference core,
+# fanar.security.secrets) is stdlib-only and unit-tests run with no third-party deps.
+# These dependencies are only needed for the web/DB/identity adapters.
+dependencies = [
+  "fastapi>=0.111",
+  "uvicorn[standard]>=0.30",
+  "httpx>=0.27",
+  "pydantic>=2.7",
+  "pydantic-settings>=2.3",
+  "sqlalchemy>=2.0",
+  "asyncpg>=0.29",
+  "pyjwt[crypto]>=2.8",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.5", "mypy>=1.10"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fanar"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+packages = ["fanar"]
+mypy_path = "src"

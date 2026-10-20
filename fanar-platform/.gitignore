@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Env & secrets — NEVER commit secrets (review finding #2)
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+secrets/
+
+# Local data / build
+dist/
+build/
+*.sqlite
