@@ -9,12 +9,13 @@ adapters over it (FastAPI, Postgres, Keycloak, Vault).
 ```bash
 # Core tests — no third-party deps needed:
 cd fanar-platform
-PYTHONPATH=src python -m unittest discover -s tests -t . -v      # 18 tests, all green
+PYTHONPATH=src python -m unittest discover -s tests -t . -v      # 23 tests, all green
 
 # Full app (needs deps): pip install -e ".[dev]" then
 docker compose up -d                      # postgres + keycloak + vault for end-to-end
-FANAR_DB_DSN=postgresql+psycopg://fanar:fanar@localhost:5432/fanar alembic upgrade head   # create the events table
+FANAR_DB_DSN=postgresql+psycopg://fanar:fanar@localhost:5432/fanar alembic upgrade head   # create tables (events + projections)
 uvicorn fanar.api.app:app --reload        # GET /health, /api/v1/reference/...
+python -m fanar.ibor.projection_runner    # keep read models in sync (outbox + LISTEN/NOTIFY)
 ```
 
 ## Layout
@@ -26,7 +27,7 @@ fanar-platform/
 │  ├─ config.py               # env-driven settings (no secrets in source)
 │  ├─ domain/                 # events.py (immutable ledger facts) · models.py (entities from docs/05)
 │  ├─ ibor/                   # event_store.py (in-memory) · pg_event_store.py (Postgres) · schema.py
-│  │                          #   · mapping.py · projections.py (positions/NAV) · factory.py
+│  │                          #   · mapping.py · projections.py · projection_runner.py · factory.py
 │  ├─ acl/                    # guard.py (read-only enforcement) · manar_client.py (doc-05 endpoint map)
 │  ├─ reference/              # service.py (Local + Manar-backed reference-data service)
 │  ├─ security/              # secrets.py (Vault/env) · auth.py (Keycloak JWT + RBAC)
@@ -55,16 +56,17 @@ fanar-platform/
 
 ## What's a stub (deliberately, for Phase 0 proper)
 
-- Postgres event store + the `0001` migration are implemented (`alembic upgrade head`); the
-  transactional **outbox + LISTEN/NOTIFY** fan-out to projections is the remaining piece.
+- Postgres event store, the projection runner (**outbox + LISTEN/NOTIFY**, checkpointed catch-up),
+  and migrations `0001`/`0002` are implemented. Remaining Phase 0 wiring: live Keycloak/JWKS + BFF,
+  Vault, and pointing the API + `ManarReferenceSource` at the live backends.
 - Live Keycloak JWKS verification wiring and the BFF session-cookie layer.
 - `VaultSecretsProvider` (hvac) and the Manar service-account token provider.
 - `ManarReferenceSource` is mapped but not yet pointed at the live server (read-only when it is).
 
 ## Next (Phase 0 exit — docs/04)
 
-1. Projection runner off the event log (outbox + LISTEN/NOTIFY); wire the API to the Postgres store
-   through `ibor/factory.build_event_store`.
+1. Wire the API to the Postgres store via `ibor/factory.build_event_store`; run the projection
+   runner (`python -m fanar.ibor.projection_runner`) as a service.
 2. Wire Keycloak (realm `fanar`, PKCE client) + JWKS verification + the BFF.
 3. Vault dev secret + the Manar service-account token provider; flip `ManarReferenceSource` live (read-only).
 4. CI: ruff + mypy + the test suite + SBOM/dependency scan.

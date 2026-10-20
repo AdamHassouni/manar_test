@@ -44,3 +44,19 @@ def latest_nav(events: list[Event], fund: str) -> dict | None:
         return None
     best = max(navs, key=lambda e: (e.effective_date, e.sequence or 0))
     return best.payload
+
+
+def position_deltas(event: Event) -> dict[PositionKey, float]:
+    """The signed position change a single event implies (pure — drives the live projection runner).
+
+    The persisted `positions` read model is updated by *applying* these deltas; the same rule is
+    used by `project_positions` for a full rebuild, so live and rebuilt states agree.
+    """
+    p = event.payload
+    if event.type in (EventType.TRANSACTION_VALIDATED, EventType.REPO_OPENED):
+        return {(p["fund"], p["instrument"]): int(p.get("sign", 1)) * float(p.get("quantity", 0))}
+    if event.type == EventType.REPO_CLOSED:
+        return {(p["fund"], p["instrument"]): -float(p.get("quantity", 0))}
+    if event.type == EventType.TRANSACTION_CANCELLED:
+        return {(p["fund"], p["instrument"]): -int(p.get("sign", 1)) * float(p.get("quantity", 0))}
+    return {}

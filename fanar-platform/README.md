@@ -9,7 +9,7 @@ Phase 0 skeleton (IBOR event-store spike, read-only ACL to Manar, reference-data
 baseline) — see [`SKELETON.md`](SKELETON.md). No Manar source is copied; Manar is a *functional
 reference* and the strangler target. See `docs/00` §3 for the clean-room / IP ground rules.
 
-**Quickstart:** `cd fanar-platform && PYTHONPATH=src python -m unittest discover -s tests -t . -v` (18 tests, green).
+**Quickstart:** `cd fanar-platform && PYTHONPATH=src python -m unittest discover -s tests -t . -v` (23 tests, green).
 
 ## Read in order
 1. [`docs/00-overview-and-scope.md`](docs/00-overview-and-scope.md) — context, clean-room rules,
