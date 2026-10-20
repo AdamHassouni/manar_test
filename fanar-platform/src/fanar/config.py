@@ -13,7 +13,7 @@ from dataclasses import dataclass
 class Settings:
     env: str = "dev"
     tenant: str = "entity1"
-    db_dsn: str = "postgresql+asyncpg://fanar:fanar@localhost:5432/fanar"
+    db_dsn: str = "postgresql+psycopg://fanar:fanar@localhost:5432/fanar"
     oidc_issuer: str = ""
     oidc_audience: str = "fanar-api"
     oidc_jwks_url: str = ""
