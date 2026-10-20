@@ -15,6 +15,9 @@ cd fanar-platform
 pip install -e ".[dev]"                                          # once (quant deps + tooling)
 python -m pytest -q                                             # 49 tests, all green
 
+# Quick dev boot — test mode (in-memory, no Postgres/Keycloak needed):
+python run_dev.py                                              # http://localhost:8000/docs
+
 # Full app (needs deps): pip install -e ".[dev]" then
 docker compose up -d                      # postgres + keycloak + vault for end-to-end
 FANAR_DB_DSN=postgresql+psycopg://fanar:fanar@localhost:5432/fanar alembic upgrade head   # create tables (events + projections)
