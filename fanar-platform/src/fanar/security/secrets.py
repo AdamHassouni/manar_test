@@ -32,7 +32,11 @@ class EnvSecretsProvider:
 
 
 class VaultSecretsProvider:
-    """Production provider (HashiCorp Vault). Stub: wire hvac in Phase 0 proper."""
+    """Production provider (HashiCorp Vault, KV v2). Reads `<mount>/<path_prefix>/<name>`.
+
+    Auth token comes from `VAULT_TOKEN` in the environment (dev); production uses a real auth method
+    (AppRole/Kubernetes). `hvac` is imported lazily so the stdlib core never requires it.
+    """
 
     def __init__(self, addr: str, mount: str = "secret", path_prefix: str = "fanar") -> None:
         self.addr = addr
@@ -40,7 +44,18 @@ class VaultSecretsProvider:
         self.path_prefix = path_prefix
 
     def get(self, name: str) -> str:  # pragma: no cover - needs a live Vault
-        raise NotImplementedError("wire hvac against Vault; read secret/fanar/<name>")
+        import hvac
+
+        client = hvac.Client(url=self.addr, token=os.environ.get("VAULT_TOKEN", ""))
+        secret = client.secrets.kv.v2.read_secret_version(
+            path=f"{self.path_prefix}/{name}", mount_point=self.mount
+        )
+        data = secret["data"]["data"]
+        if "value" in data:
+            return data["value"]
+        if len(data) == 1:
+            return next(iter(data.values()))
+        raise SecretNotFound(f"{name}: expected a 'value' field")
 
 
 def build_provider(backend: str, *, vault_addr: str = "") -> SecretsProvider:

@@ -1,40 +1,40 @@
 """Reference-data routes — GET-only reads over the ReferenceService.
 
-Defaults to the offline LocalReferenceSource so the app runs without Manar; wiring swaps in
-ManarReferenceSource (through the ACL) when reading live reference data.
+The service is resolved per request from `get_reference_service` (local seed by default, or live
+Manar via the ACL when `FANAR_REFERENCE_SOURCE=manar` — always read-only).
 """
 from __future__ import annotations
 
 from dataclasses import asdict
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
-from fanar.reference.service import LocalReferenceSource, ReferenceService
+from fanar.api.deps import get_reference_service
+from fanar.reference.service import ReferenceService
 
 router = APIRouter()
-_service = ReferenceService(LocalReferenceSource())
 
 
 @router.get("/funds")
-def funds() -> list[dict]:
-    return [asdict(f) for f in _service.funds()]
+def funds(service: ReferenceService = Depends(get_reference_service)) -> list[dict]:
+    return [asdict(f) for f in service.funds()]
 
 
 @router.get("/posting-rules")
-def posting_rules() -> list[dict]:
-    return [asdict(p) for p in _service.posting_rules()]
+def posting_rules(service: ReferenceService = Depends(get_reference_service)) -> list[dict]:
+    return [asdict(p) for p in service.posting_rules()]
 
 
 @router.get("/counterparties")
-def counterparties() -> list[dict]:
-    return [asdict(c) for c in _service.counterparties()]
+def counterparties(service: ReferenceService = Depends(get_reference_service)) -> list[dict]:
+    return [asdict(c) for c in service.counterparties()]
 
 
 @router.get("/curve-types")
-def curve_types() -> list[dict]:
-    return [asdict(c) for c in _service.curve_types()]
+def curve_types(service: ReferenceService = Depends(get_reference_service)) -> list[dict]:
+    return [asdict(c) for c in service.curve_types()]
 
 
 @router.get("/codifications/{cls}")
-def codifications(cls: str) -> list[dict]:
-    return [asdict(c) for c in _service.codifications(cls)]
+def codifications(cls: str, service: ReferenceService = Depends(get_reference_service)) -> list[dict]:
+    return [asdict(c) for c in service.codifications(cls)]

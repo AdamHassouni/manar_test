@@ -23,11 +23,14 @@ class Settings:
     # BFF session cookie
     session_cookie_name: str = "fanar_session"
     cookie_secure: bool = True
-    # Secrets + Manar ACL
+    # Secrets
     secrets_backend: str = "env"            # "env" | "vault"
     vault_addr: str = ""
+    # Manar ACL (strangler)
     manar_base_url: str = "http://192.168.1.104"
     manar_read_only: bool = True
+    manar_client_id: str = "manar-frontend"
+    reference_source: str = "local"         # "local" (seed) | "manar" (live via ACL, read-only)
 
     @staticmethod
     def from_env(environ: dict[str, str] | None = None) -> "Settings":
@@ -51,4 +54,6 @@ class Settings:
             vault_addr=e.get("FANAR_VAULT_ADDR", ""),
             manar_base_url=e.get("FANAR_MANAR_BASE_URL", "http://192.168.1.104"),
             manar_read_only=b("FANAR_MANAR_READ_ONLY", True),
+            manar_client_id=e.get("FANAR_MANAR_CLIENT_ID", "manar-frontend"),
+            reference_source=e.get("FANAR_REFERENCE_SOURCE", "local"),
         )

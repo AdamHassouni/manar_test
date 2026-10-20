@@ -9,7 +9,7 @@ adapters over it (FastAPI, Postgres, Keycloak, Vault).
 ```bash
 # Core tests — no third-party deps needed:
 cd fanar-platform
-PYTHONPATH=src python -m unittest discover -s tests -t . -v      # 33 tests, all green
+PYTHONPATH=src python -m unittest discover -s tests -t . -v      # 35 tests, all green
 
 # Full app (needs deps): pip install -e ".[dev]" then
 docker compose up -d                      # postgres + keycloak + vault for end-to-end
@@ -33,7 +33,7 @@ fanar-platform/
 │  ├─ domain/                 # events.py (immutable ledger facts) · models.py (entities from docs/05)
 │  ├─ ibor/                   # event_store.py (in-memory) · pg_event_store.py (Postgres) · schema.py
 │  │                          #   · mapping.py · projections.py · projection_runner.py · commands.py · factory.py
-│  ├─ acl/                    # guard.py (read-only enforcement) · manar_client.py (doc-05 endpoint map)
+│  ├─ acl/                    # guard.py (read-only) · manar_client.py (doc-05 map) · token_provider.py
 │  ├─ reference/              # service.py (Local + Manar-backed reference-data service)
 │  ├─ security/              # secrets.py · auth.py (JWT + RBAC) · pkce.py · sessions.py · oidc.py (BFF)
 │  └─ api/                    # app.py · deps.py · routes_auth.py (BFF) · routes_reference.py · routes_ibor.py
@@ -59,7 +59,8 @@ stdlib `ibor/commands.py`, so it is unit-tested without a web server.
 
 ## Review findings addressed structurally
 
-- **#2 plaintext secrets** → `security/secrets.py` (Vault/env provider; `.gitignore` blocks `.env`, keys).
+- **#2 plaintext secrets** → `security/secrets.py` (Vault KV v2 / env provider) + `acl/token_provider.py`
+  (Manar service-account token from secrets, cached); `.gitignore` blocks `.env` and keys.
 - **#1/#4/#5 transport & tokens** → the **BFF** (`api/routes_auth.py` + `security/{pkce,sessions,oidc}.py`)
   runs auth-code + PKCE and keeps tokens **server-side** behind an httpOnly/secure/same-site session
   cookie; the API validates a bearer JWT via cached JWKS (`security/auth.JwtVerifier`). Tokens never
@@ -74,14 +75,17 @@ stdlib `ibor/commands.py`, so it is unit-tested without a web server.
   API + `ManarReferenceSource` at the live backends.
 - A running Keycloak realm (`fanar`, a public PKCE client) and a shared session store (Redis) to run
   the BFF end-to-end; the flow, PKCE, session store and JWKS verifier are implemented and unit-tested.
-- `VaultSecretsProvider` (hvac) and the Manar service-account token provider.
-- `ManarReferenceSource` is mapped but not yet pointed at the live server (read-only when it is).
+- `VaultSecretsProvider` (hvac, KV v2) and the Manar token provider are implemented; they need a
+  running Vault + the Manar service account to exercise live.
+- `ManarReferenceSource` goes live read-only with `FANAR_REFERENCE_SOURCE=manar` (reads reference
+  data from Manar through the ACL).
 
 ## Next (Phase 0 exit — docs/04)
 
 1. Integration test of the command → ledger → projection path against a live Postgres
    (FastAPI TestClient + a disposable DB), then run the projection runner as a service.
 2. Provision the Keycloak `fanar` realm + PKCE client and a shared session store (Redis) for the BFF.
-3. Vault dev secret + the Manar service-account token provider; flip `ManarReferenceSource` live (read-only).
+3. Stand up Vault (dev secret) + the Manar service account, then run with
+   `FANAR_REFERENCE_SOURCE=manar` to read live reference data read-only through the ACL.
 4. CI: ruff + mypy + the test suite + SBOM/dependency scan.
 5. A thin vertical slice: log in → read reference data from Manar via the ACL → record an audited event.

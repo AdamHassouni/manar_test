@@ -1,8 +1,11 @@
-"""FastAPI dependencies — settings, event store, BFF session/OIDC, and the authenticated principal.
+"""FastAPI dependencies — settings, event store, reference data, BFF session/OIDC, and the principal.
 
 Principal resolution order: (1) the BFF **session cookie** (browser clients — tokens stay
 server-side); (2) a **bearer JWT** validated against the realm JWKS (service/automation clients);
 (3) a dev principal when no IdP is configured, so the API is exercisable offline.
+
+Reference data comes from the local seed by default, or live from Manar (read-only, via the ACL)
+when `FANAR_REFERENCE_SOURCE=manar`.
 """
 from __future__ import annotations
 
@@ -10,11 +13,15 @@ from functools import lru_cache
 
 from fastapi import Header, HTTPException, Request
 
+from fanar.acl.manar_client import ManarClient
+from fanar.acl.token_provider import ManarTokenProvider
 from fanar.config import Settings
 from fanar.ibor.event_store import EventStore
 from fanar.ibor.factory import build_event_store
+from fanar.reference.service import LocalReferenceSource, ManarReferenceSource, ReferenceService
 from fanar.security.auth import JwtVerifier, Principal
 from fanar.security.oidc import OidcClient
+from fanar.security.secrets import SecretsProvider, build_provider
 from fanar.security.sessions import InMemorySessionStore, SessionStore
 
 
@@ -26,6 +33,25 @@ def get_settings() -> Settings:
 @lru_cache
 def get_event_store() -> EventStore:
     return build_event_store(get_settings())
+
+
+@lru_cache
+def get_secrets_provider() -> SecretsProvider:
+    s = get_settings()
+    return build_provider(s.secrets_backend, vault_addr=s.vault_addr)
+
+
+@lru_cache
+def get_reference_service() -> ReferenceService:
+    s = get_settings()
+    if s.reference_source == "manar":
+        token_url = f"{s.manar_base_url.rstrip('/')}/realms/manar/protocol/openid-connect/token"
+        token_provider = ManarTokenProvider(
+            token_url=token_url, client_id=s.manar_client_id, secrets=get_secrets_provider()
+        )
+        manar = ManarClient(s.manar_base_url, token_provider, read_only=True, tenant=s.tenant)
+        return ReferenceService(ManarReferenceSource(manar))
+    return ReferenceService(LocalReferenceSource())
 
 
 @lru_cache
