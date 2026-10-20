@@ -15,6 +15,8 @@ from fastapi import Header, HTTPException, Request
 
 from fanar.acl.manar_client import ManarClient
 from fanar.acl.token_provider import ManarTokenProvider
+from fanar.audit.factory import build_audit_log
+from fanar.audit.log import AuditLog
 from fanar.config import Settings
 from fanar.ibor.event_store import EventStore
 from fanar.ibor.factory import build_event_store
@@ -33,6 +35,11 @@ def get_settings() -> Settings:
 @lru_cache
 def get_event_store() -> EventStore:
     return build_event_store(get_settings())
+
+
+@lru_cache
+def get_audit_log() -> AuditLog:
+    return build_audit_log(get_settings())
 
 
 @lru_cache

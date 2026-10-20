@@ -7,6 +7,7 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+import fanar.audit.schema  # noqa: F401 - registers audit_entries on the shared metadata
 from fanar.ibor.schema import metadata
 
 config = context.config

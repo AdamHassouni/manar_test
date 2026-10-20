@@ -9,7 +9,7 @@ adapters over it (FastAPI, Postgres, Keycloak, Vault).
 ```bash
 # Core tests — no third-party deps needed:
 cd fanar-platform
-PYTHONPATH=src python -m unittest discover -s tests -t . -v      # 35 tests, all green
+PYTHONPATH=src python -m unittest discover -s tests -t . -v      # 39 tests, all green
 
 # Full app (needs deps): pip install -e ".[dev]" then
 docker compose up -d                      # postgres + keycloak + vault for end-to-end
@@ -36,8 +36,10 @@ fanar-platform/
 │  ├─ acl/                    # guard.py (read-only) · manar_client.py (doc-05 map) · token_provider.py
 │  ├─ reference/              # service.py (Local + Manar-backed reference-data service)
 │  ├─ security/              # secrets.py · auth.py (JWT + RBAC) · pkce.py · sessions.py · oidc.py (BFF)
+│  ├─ audit/                 # log.py (in-memory) · pg_audit_log.py · schema.py · factory.py
+│  ├─ services/              # transactions.py (booking use case: login → reference → ledger → audit)
 │  └─ api/                    # app.py · deps.py · routes_auth.py (BFF) · routes_reference.py · routes_ibor.py
-├─ migrations/                # Alembic: 0001 creates the append-only events table (+ no-mutate trigger)
+├─ migrations/                # Alembic: 0001 events · 0002 projections+notify · 0003 audit (append-only)
 ├─ tests/                     # stdlib unittest — core is provable offline
 ├─ alembic.ini · pyproject.toml · Dockerfile · docker-compose.yml · .env.example
 ```
@@ -69,6 +71,12 @@ event (idempotent via `Idempotency-Key`, behind a maker/checker role check), and
 `ibor/factory` (in-memory under `FANAR_ENV=test`, Postgres otherwise). Command handling lives in the
 stdlib `ibor/commands.py`, so it is unit-tested without a web server.
 
+The command runs through the **vertical slice** `services/transactions.book_transaction`: it
+authorizes the principal (BFF session or bearer JWT), validates the fund against reference data
+(live Manar via the ACL when `FANAR_REFERENCE_SOURCE=manar`), appends the event, and records an
+**audit entry** — read back at `GET /api/v1/ibor/audit`. The whole slice is unit-tested offline
+(`test_vertical_slice.py`).
+
 ## Review findings addressed structurally
 
 - **#2 plaintext secrets** → `security/secrets.py` (Vault KV v2 / env provider) + `acl/token_provider.py`
@@ -81,6 +89,8 @@ stdlib `ibor/commands.py`, so it is unit-tested without a web server.
 - **read-only-by-default to Manar** → `acl/guard.py` blocks `/command/` unless explicitly authorised.
 - **supported deps (SBOM + patch cadence)** → CI runs `pip-audit` and generates a CycloneDX SBOM on
   every push/PR (`.github/workflows/ci.yml`).
+- **auditability** → `audit/` records who/what/when for every booking (append-only, migration `0003`,
+  read at `GET /api/v1/ibor/audit`).
 
 ## What's a stub (deliberately, for Phase 0 proper)
 
@@ -102,4 +112,5 @@ stdlib `ibor/commands.py`, so it is unit-tested without a web server.
 3. Stand up Vault (dev secret) + the Manar service account, then run with
    `FANAR_REFERENCE_SOURCE=manar` to read live reference data read-only through the ACL.
 4. Tighten CI: make `ruff format --check` and `mypy` blocking once the baseline is clean (advisory now).
-5. A thin vertical slice: log in → read reference data from Manar via the ACL → record an audited event.
+5. Drive the booking vertical slice (`services/transactions.py`) against live infra (Postgres +
+   Keycloak + Manar) and add a FastAPI TestClient integration test.
