@@ -42,6 +42,18 @@ fanar-platform/
 ├─ alembic.ini · pyproject.toml · Dockerfile · docker-compose.yml · .env.example
 ```
 
+## CI
+
+`.github/workflows/ci.yml` (GitHub Actions) runs on push to `main` and every PR, from the
+`fanar-platform/` working directory:
+- **lint-type-test**: `ruff check` (blocking) · `ruff format --check` + `mypy` (advisory in Phase 0)
+  · `pytest`.
+- **security**: `pip-audit --strict` (dependency vulnerability scan) + a **CycloneDX SBOM** uploaded
+  as a build artifact.
+
+Locally: `pip install -e ".[dev]"` then `ruff check src tests`, `mypy src/fanar`, `pytest -q`,
+`pip-audit`.
+
 ## The four requested pieces → where they are
 
 | Requested | Implemented in | Proven by |
@@ -67,6 +79,8 @@ stdlib `ibor/commands.py`, so it is unit-tested without a web server.
   reach the browser.
 - **"never book twice"** → `ibor/event_store.py` idempotency keys.
 - **read-only-by-default to Manar** → `acl/guard.py` blocks `/command/` unless explicitly authorised.
+- **supported deps (SBOM + patch cadence)** → CI runs `pip-audit` and generates a CycloneDX SBOM on
+  every push/PR (`.github/workflows/ci.yml`).
 
 ## What's a stub (deliberately, for Phase 0 proper)
 
@@ -87,5 +101,5 @@ stdlib `ibor/commands.py`, so it is unit-tested without a web server.
 2. Provision the Keycloak `fanar` realm + PKCE client and a shared session store (Redis) for the BFF.
 3. Stand up Vault (dev secret) + the Manar service account, then run with
    `FANAR_REFERENCE_SOURCE=manar` to read live reference data read-only through the ACL.
-4. CI: ruff + mypy + the test suite + SBOM/dependency scan.
+4. Tighten CI: make `ruff format --check` and `mypy` blocking once the baseline is clean (advisory now).
 5. A thin vertical slice: log in → read reference data from Manar via the ACL → record an audited event.
