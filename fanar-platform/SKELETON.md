@@ -4,12 +4,16 @@ A runnable skeleton of the Phase 0 "foundations & spine" from [`docs/04`](docs/0
 §Phase 0. The **core is stdlib-only and unit-tested now**; the web/DB/identity layers are thin
 adapters over it (FastAPI, Postgres, Keycloak, Vault).
 
+**Phase 1 has begun** — market-data curve modelling (**NSS + Kalman**, `marketdata/`) and the **NAV
+engine** (`nav/`, with QuantLib bond pricing off the NSS curve). These add `numpy`/`scipy`/`QuantLib`.
+
 ## Run it
 
 ```bash
-# Core tests — no third-party deps needed:
+# Tests — the non-quant core is stdlib-only; Phase-1 quant tests need numpy/scipy/QuantLib:
 cd fanar-platform
-PYTHONPATH=src python -m unittest discover -s tests -t . -v      # 39 tests, all green
+pip install -e ".[dev]"                                          # once (quant deps + tooling)
+python -m pytest -q                                             # 49 tests, all green
 
 # Full app (needs deps): pip install -e ".[dev]" then
 docker compose up -d                      # postgres + keycloak + vault for end-to-end
@@ -38,6 +42,8 @@ fanar-platform/
 │  ├─ security/              # secrets.py · auth.py (JWT + RBAC) · pkce.py · sessions.py · oidc.py (BFF)
 │  ├─ audit/                 # log.py (in-memory) · pg_audit_log.py · schema.py · factory.py
 │  ├─ services/              # transactions.py (booking use case: login → reference → ledger → audit)
+│  ├─ marketdata/            # nss.py (NSS curve) · kalman.py · fit.py — BAM curve modelling (Phase 1)
+│  ├─ nav/                   # engine.py (NAV/VL + dual-calc) · pricing.py (QuantLib) — Phase 1
 │  └─ api/                    # app.py · deps.py · routes_auth.py (BFF) · routes_reference.py · routes_ibor.py
 ├─ migrations/                # Alembic: 0001 events · 0002 projections+notify · 0003 audit (append-only)
 ├─ tests/                     # stdlib unittest — core is provable offline
